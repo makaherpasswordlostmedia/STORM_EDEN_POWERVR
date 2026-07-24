@@ -45,7 +45,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK & CMake via sdkmanager
+      - name: Install build dependencies (glslang, etc.)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y glslang-tools
+          which glslangValidator
+          glslangValidator --version || true
         run: |
           sdkmanager --install "ndk;28.2.13676358"
           sdkmanager --install "cmake;3.30.5"
