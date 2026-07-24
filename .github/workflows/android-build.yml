@@ -93,13 +93,37 @@ jobs:
         env:
           CCACHE_DIR: /home/runner/.ccache
         run: |
+          set +e
+          LOGFILE=/tmp/gradle-build.log
+
           if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
-            ./gradlew assembleRelease --stacktrace --parallel \
-              -PYUZU_ANDROID_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+            TASK=assembleRelease
           else
-            ./gradlew assembleRelWithDebInfo --stacktrace --parallel \
-              -PYUZU_ANDROID_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+            TASK=assembleRelWithDebInfo
           fi
+
+          ./gradlew "$TASK" --stacktrace --parallel \
+            -PYUZU_ANDROID_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache" \
+            > "$LOGFILE" 2>&1
+          STATUS=$?
+
+          echo "===== Последние 200 строк лога ====="
+          tail -n 200 "$LOGFILE"
+
+          if [ $STATUS -ne 0 ]; then
+            echo "===== Сборка провалилась (exit $STATUS). Полный лог см. в артефакте gradle-build-log ====="
+          fi
+
+          exit $STATUS
+
+      - name: Upload full build log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log-${{ github.sha }}
+          path: /tmp/gradle-build.log
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Locate built APK(s)
         id: find_apk
