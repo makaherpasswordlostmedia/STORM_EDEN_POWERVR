@@ -58,11 +58,13 @@ jobs:
           sdkmanager --install "cmake;3.30.5"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Cache CPM dependencies
+        uses: actions/cache@v4
         with:
-          key: android-${{ runner.os }}
-          max-size: 2G
+          path: .cache/cpm
+          key: cpm-${{ hashFiles('externals/cpmfile.json', 'CMakeLists.txt', 'src/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -97,8 +99,6 @@ jobs:
 
       - name: Build APK (${{ github.event.inputs.build_type || 'relWithDebInfo' }})
         working-directory: src/android
-        env:
-          CCACHE_DIR: /home/runner/.ccache
         run: |
           set +e
           LOGFILE=/tmp/gradle-build.log
@@ -110,7 +110,6 @@ jobs:
           fi
 
           ./gradlew "$TASK" --stacktrace --parallel \
-            -PYUZU_ANDROID_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache" \
             > "$LOGFILE" 2>&1
           STATUS=$?
 
