@@ -1,0 +1,106 @@
+name: Android Build
+
+# Собирает Android APK (Eden / Storm Eden PowerVR fork) и
+# выкладывает его как GitHub Actions Artifact, доступный для скачивания
+# со страницы запуска workflow.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - '.github/workflows/android-build.yml'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Тип сборки'
+        required: true
+        default: 'relWithDebInfo'
+        type: choice
+        options:
+          - relWithDebInfo
+          - release
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK & CMake via sdkmanager
+        run: |
+          sdkmanager --install "ndk;28.2.13676358"
+          sdkmanager --install "cmake;3.30.5"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: android-${{ runner.os }}
+          max-size: 2G
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('src/android/**/*.gradle*', 'src/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-
+
+      - name: Write local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > src/android/local.properties
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x src/android/gradlew
+
+      - name: Build APK (${{ github.event.inputs.build_type || 'relWithDebInfo' }})
+        working-directory: src/android
+        env:
+          CCACHE_DIR: /home/runner/.ccache
+        run: |
+          if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
+            ./gradlew assembleRelease --stacktrace --parallel \
+              -Porg.gradle.jvmargs="-Xmx6g" \
+              -PYUZU_ANDROID_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          else
+            ./gradlew assembleRelWithDebInfo --stacktrace --parallel \
+              -Porg.gradle.jvmargs="-Xmx6g" \
+              -PYUZU_ANDROID_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          fi
+
+      - name: Locate built APK(s)
+        id: find_apk
+        working-directory: src/android
+        run: |
+          mkdir -p /tmp/apk-out
+          find app/build/outputs/apk -name "*.apk" -exec cp {} /tmp/apk-out/ \;
+          ls -la /tmp/apk-out
+
+      - name: Upload APK as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: storm-eden-android-${{ github.sha }}
+          path: /tmp/apk-out/*.apk
+          retention-days: 14
+          if-no-files-found: error
