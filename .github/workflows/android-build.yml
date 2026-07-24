@@ -74,6 +74,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x src/android/gradlew
 
+      - name: Set Gradle JVM args
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8" >> ~/.gradle/gradle.properties
+
       - name: Build APK (${{ github.event.inputs.build_type || 'relWithDebInfo' }})
         working-directory: src/android
         env:
@@ -81,11 +86,9 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
             ./gradlew assembleRelease --stacktrace --parallel \
-              -Porg.gradle.jvmargs="-Xmx6g" \
               -PYUZU_ANDROID_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
           else
             ./gradlew assembleRelWithDebInfo --stacktrace --parallel \
-              -Porg.gradle.jvmargs="-Xmx6g" \
               -PYUZU_ANDROID_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
           fi
 
