@@ -77,7 +77,16 @@ jobs:
       - name: Set Gradle JVM args
         run: |
           mkdir -p ~/.gradle
+          touch ~/.gradle/gradle.properties
+          sed -i '/^org\.gradle\.jvmargs/d' ~/.gradle/gradle.properties
           echo "org.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8" >> ~/.gradle/gradle.properties
+          cat ~/.gradle/gradle.properties
+
+      - name: Remove hardcoded Windows java.home from project gradle.properties
+        working-directory: src/android
+        run: |
+          sed -i '/^org\.gradle\.java\.home/d' gradle.properties
+          cat gradle.properties
 
       - name: Build APK (${{ github.event.inputs.build_type || 'relWithDebInfo' }})
         working-directory: src/android
